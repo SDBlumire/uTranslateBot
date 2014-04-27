@@ -2,6 +2,7 @@ import goslate
 import unidecode
 import praw
 import time
+import sys
 
 #Set Up
 gs = goslate.Goslate()                              #Translator Varaible
@@ -10,7 +11,7 @@ langi = {v:k for k, v in lang.items()}              #Language Code Index
 reddit = praw.Reddit(user_agent='uLinguaBot')       #Set up Reddit User Agent
 passw = raw_input('Input LinguaBot Password: ')     #Get Bots Password
 reddit.login('LinguaBot', passw)                    #Log into LinguaBot
-
+#reddit.login('LinguaBot', sys.argv[1])
 
 #Get Strings (Function taken from internet)
 def find_between( s, first, last ):
@@ -45,9 +46,24 @@ while True:
             #Find the string that the user wants converted
             ts = find_between(msgs, '"', '"')
 
+            #If no translation string is provided and the comment is not top level
+            if ts == "" and msg.is_root == False:
+                ts = reddit.get_info(thing_id=msg.parent_id).body
+                
+
             #Find the languages the user wants to translate to
             langs = find_between(msgs, "[", "]").split()
 
+            #Detect if the user has specified a language
+            lf = find_between(msgs, "(", ")").title()
+
+            #If the user has not specified a language autodetect it.
+            if lf == "":
+                lf = lang[gs.detect(ts)]
+                
+            #Inform the user which translated language was specified or detected
+            tsf.append("Translating from " + lf + "\n\n___\n\n")
+            
             #For each language they want translated
             for x in langs:
                 
@@ -55,10 +71,10 @@ while True:
                 x = x.title()
                 
                 #If that language is valid
-                if x in langi:
-
+                if x in langi and lf in langi:
+                    
                     #Translate their string into that language
-                    a = gs.translate(ts, langi[x])
+                    a = gs.translate(ts, langi[x], langi[lf])                     
 
                     #Transliterate the foreign alphabet into english
                     b = unidecode.unidecode(a)
