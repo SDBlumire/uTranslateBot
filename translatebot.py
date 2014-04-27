@@ -30,6 +30,8 @@ while True:
 
     #Check unread messages
     for msg in reddit.get_unread(limit=None):
+
+        highflag = 0
         
         #Get the contents of the message
         msgs = msg.body
@@ -48,58 +50,113 @@ while True:
 
             #If no translation string is provided and the comment is not top level
             if ts == "" and msg.is_root == False:
-                ts = reddit.get_info(thing_id=msg.parent_id).body
                 
+                #Set the translation string to the body of the comment the user replied too
+                ts = reddit.get_info(thing_id=msg.parent_id).body
+
+            #If no translation string is provided and the comment is top level
+            if ts == "" and msg.is_root == True:
+
+                #Set the translation string to the self text of the post the user replied too
+                ts = reddit.get_info(thing_id=msg.parent_id).selftext
 
             #Find the languages the user wants to translate to
             langs = find_between(msgs, "[", "]").split()
 
+            #If the string says "All" supply all available for translation strings
+            if langs[0].title() == "All":
+                langs = "Gujarati Chinese Irish Galician Latin Lao Turkish Latvian Lithuanian Thai Telugu Tamil Yiddish Cebuano Yoruba German Danish Greek Esperanto Basque Zulu Spanish Russian Romanian Belarusian Bulgarian Malay Bengali Javanese Bosnian Japanese Catalan Welsh Czech Portuguese Filipino Punjabi Polish Armenian Croatian Hungarian Hmong Hindi Hausa Mongolian Maori Macedonian Urdu Maltese Ukrainian Marathi Afrikaans Vietnamese Icelandic Italian Hebrew Kannada Arabic Estonian Azerbaijani Indonesian Igbo Dutch Norwegian Nepali French Persian Finnish Georgian Serbian Albanian Korean Swedish Khmer Slovak Somali Slovenian Swahili English".split()
+
+            #If the string says "Europe" or "European" supply all languages from Europe
+            if langs[0].title() == "Europe" or langs[0].title() == "European" or langs[0].upper() == "EU":
+                langs = "English Welsh Icelandic Norwegian Swedish Finnish Russian Portuguese French German Dutch Danish Polish Czech Polish Lithuanian Latvian Estonian Belarusian Ukrainian Romanian Hungarian Slovak Itallian Serbian Bulgarian Greek Turkish Irish Bosnian Croation Macedonian Albanian Slovenian Catalan Basque Galician Maltese Latin".split()
+
+
+            #If the string says "EUW" give all western european languages
+            if langs[0].upper() == "EUW":
+                langs = "Irish English Welsh Icelandic Norwegian Swedish Danish German Dutch French Basque Spanish Catalan Galician Portuguese Maltese".split()
+
+            #If the string says "EUE" give all eastern european languages
+            if langs[0].upper() == "EUE":
+                langs = list(set("English Welsh Icelandic Norwegian Swedish Finnish Russian Portuguese French German Dutch Danish Polish Czech Polish Lithuanian Latvian Estonian Belarusian Ukrainian Romanian Hungarian Slovak Itallian Serbian Bulgarian Greek Turkish Irish Bosnian Croation Macedonian Albanian Slovenian Catalan Basque Galician Maltese Latin".split()) - set("Irish English Welsh Icelandic Norwegian Swedish Danish German Dutch French Basque Spanish Catalan Galician Portuguese Maltese".split()))
+
+            #If the strong says "Scandinavian" or "EUSC" give all scandinavian languages
+            if langs[0].title() == "Scandinavian" or langs[0].upper() == "EUSC":
+                langs = "Danish Nowegian Swedish Icelandic".split()
+            
             #Detect if the user has specified a language
             lf = find_between(msgs, "(", ")").title()
 
             #If the user has not specified a language autodetect it.
             if lf == "":
                 lf = lang[gs.detect(ts)]
-                
-            #Inform the user which translated language was specified or detected
-            tsf.append("Translating from " + lf + "\n\n___\n\n")
+
+            #If the user is abusing the bot set the high flag
+            if len(langs) > 85:
+                highflag = 1
+
+            print ts
             
-            #For each language they want translated
-            for x in langs:
+            #Inform the user which translated language was specified or detected
+            tsf.append("#Translating from " + lf + "\n\n___\n\n")
+
+            #If the user is not abusing the bot
+            if highflag == 0:
                 
-                #Capitalize the first letter of the language to format it properly
-                x = x.title()
-                
-                #If that language is valid
-                if x in langi and lf in langi:
+                #For each language they want translated
+                for x in langs:
                     
-                    #Translate their string into that language
-                    a = gs.translate(ts, langi[x], langi[lf])                     
+                    #Capitalize the first letter of the language to format it properly
+                    x = x.title()
+                    
+                    #If that language is valid
+                    if x in langi and lf in langi:
+                        
+                        #Translate their string into that language
+                        a = gs.translate(ts, langi[x], langi[lf])                     
 
-                    #Transliterate the foreign alphabet into english
-                    b = unidecode.unidecode(a)
+                        #Transliterate the foreign alphabet into english
+                        b = unidecode.unidecode(a)
 
-                    #If the transliteration and the original are not the same
-                    if a != unicode(b):
+                        #If the transliteration and the original are not the same
+                        if a != unicode(b):
 
-                        #Add the transliteration after the original
-                        a = a + " / " + unicode(b)
+                            #Add the transliteration after the original
+                            a = a + "\n\n___\n\n **Transliterated " + x + "** \n\n" + unicode(b)
 
-                    #And add the translation to our translations list
-                    tsf.append(a)
+                        #add an underline after the translation
+                        a = a + "\n\n___\n\n"
 
-                #If the language is not valid
-                else:
+                        #add a title before the translation
+                        a = "**" + x + "**\n\n" + a
+                                                               
+                        #And add the translation to our translations list
+                        tsf.append(a)
 
-                    #Add the fact this cannot be used to the list
-                    tsf.append(x + " is not a supported language")
+                    #If the language is not valid
+                    else:
 
-            #If a translation has been done
-            if tsf != []:
+                        #Add the fact this cannot be used to the list
+                        tsf.append("**" + x + "**\n\n" + " is not a supported language \n\n___\n\n")
 
-                #Give the user each of their translations, separated by lines.
-                msg.reply("\n\n".join(tsf))
-                
+                      
+                #If a translation has been done
+                if tsf != []:
+                    #Give the user each of their translations, separated by lines.
+                    try:
+                        msg.reply("\n\n".join(tsf))
+                    except praw.errors.RateLimitExceeded as error:
+                        time.sleep(error.sleep_time)
+
+            #If the user is abusing the bot
+            elif highflag == 1:
+
+                #Tell them to stop
+                try:
+                    msg.reply("The bot has detect an attempt at abuse. Please don't do this again.")
+                except praw.errors.RateLimitExceeded as error:
+                        time.sleep(error.sleep_time)
+                        
         #Mark the message read so it's not processed twice
         msg.mark_as_read()
 
